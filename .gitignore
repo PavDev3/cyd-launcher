@@ -2,7 +2,7 @@
 .pio/
 .vscode/
 
-# Binarios de firmwares de terceros (HaleHound-CYD es cerrado, no se redistribuye)
+# Binarios de firmwares de terceros (no se redistribuyen)
 *.bin
 
 # Logs de depuración

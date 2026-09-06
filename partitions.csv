@@ -1,11 +1,11 @@
 # Name,     Type, SubType,   Offset,   Size,     Flags
 # Esquema "SD-flash-on-demand" con DOS slots OTA reales (ota_0 + ota_1).
-# launcher (ota_1) ahora incluye WiFi+WebServer (subida de .bin sin SD),
-# lo que le hizo falta más espacio -> se agrandó a costa de app0 (que
-# igual sobraba: HaleHound real pesa ~2.45MB, aquí le quedan ~2.8MB).
+# launcher (ota_1) incluye WiFi+WebServer (subida de .bin sin SD), lo que
+# le hizo falta más espacio -> se agrandó a costa de app0 (~2.8MB de
+# margen, de sobra para la mayoria de firmwares Arduino/ESP-IDF).
 #
 # launcher (ota_1): nuestro menu (WiFi, calibracion, etc.)
-# app0     (ota_0): firmware activo elegido desde la SD (HaleHound, etc.)
+# app0     (ota_0): firmware activo elegido desde la SD
 #
 # Total = 0x400000 (4194304 bytes) exacto
 nvs,        data, nvs,       0x9000,   0x5000,

@@ -26,17 +26,18 @@
  *  - Menú Opciones: Pantalla (calibrar/rotar), WiFi upload, Device Info, Apagar
  *
  * IMPORTANTE — dos slots OTA reales, no "factory":
- *   HaleHound-CYD es de código cerrado (el repo público solo trae
- *   README+LICENSE, sin fuente), así que no se puede parchear con un
- *   gesto propio de "volver al launcher". En su lugar, esta partition
- *   table usa DOS particiones OTA reales (ota_0 = app0, ota_1 = launcher)
- *   en vez de un slot "factory" — así esp_ota_get_next_update_partition()
- *   (lo que usa tanto este launcher como el propio "Tools > Update
- *   Firmware" de HaleHound) siempre encuentra el otro slot como destino
- *   válido.
+ *   Muchos firmwares de terceros (closed-source o no) no se pueden
+ *   parchear con un gesto propio de "volver al launcher". Por eso esta
+ *   partition table usa DOS particiones OTA reales (ota_0 = app0,
+ *   ota_1 = launcher) en vez de un slot "factory" — así
+ *   esp_ota_get_next_update_partition() (lo que usa tanto este launcher
+ *   como cualquier firmware que traiga su propia opción de "actualizar
+ *   por SD" vía Update.h estándar de Arduino) siempre encuentra el otro
+ *   slot como destino válido.
  *
- *   Para volver al launcher desde HaleHound: Tools > Update Firmware >
- *   elegir /firmware/CYD-Launcher.bin en la SD.
+ *   Para volver al launcher desde un firmware hijo: si ese firmware
+ *   trae su propia opción de actualizar/flashear desde SD, úsala
+ *   eligiendo /firmware/CYD-Launcher.bin.
  */
 
 #include "config.h"
