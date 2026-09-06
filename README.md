@@ -1,7 +1,6 @@
 # CYD Multi-Boot Launcher (carga firmwares desde microSD)
 
-Launcher para ESP32-2432S028R ("CYD") con splash pixel-art y firma "By
-HeraDev". Escanea `/firmware/*.bin` en la microSD, muestra un menú
+Launcher para ESP32-2432S028R ("CYD"). Escanea `/firmware/*.bin` en la microSD, muestra un menú
 táctil, flashea el elegido al slot OTA activo y arranca.
 
 **Estado: funcionando end-to-end** (launcher ↔ HaleHound-CYD, ida y vuelta).
