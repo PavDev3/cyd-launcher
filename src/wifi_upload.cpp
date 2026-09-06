@@ -72,17 +72,19 @@ static void handleWifiUpdate() {
     return;
   }
 
-  bool downloaded = downloadLatestRelease(ssid, pass);
-  bool flashed = downloaded && flashLauncherSelfUpdate();
+  UpdateResult result = downloadLatestRelease(ssid, pass);
+  bool flashed = (result == UpdateResult::Downloaded) && flashLauncherSelfUpdate();
 
-  // La pantalla de resultado tapó el botón "Salir" — lo restauramos por
-  // si el flasheo falló y el dispositivo sigue en esta pantalla.
+  // La pantalla de resultado tapó el botón "Salir" — lo restauramos salvo
+  // que vayamos a reiniciar de todas formas.
   if (!flashed) drawWifiScreen(apIp);
 
   String msg;
   if (flashed) {
     msg = "Actualizado! El dispositivo se va a reiniciar solo en unos segundos con la nueva version.";
-  } else if (downloaded) {
+  } else if (result == UpdateResult::AlreadyLatest) {
+    msg = "Ya tienes la ultima version (" LAUNCHER_VERSION "). No hacia falta actualizar.";
+  } else if (result == UpdateResult::Downloaded) {
     msg = "Se descargo pero no se pudo flashear automaticamente. "
           "Puedes elegir " OTA_ASSET_NAME " a mano en el menu principal.";
   } else {

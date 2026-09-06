@@ -28,10 +28,15 @@ jobs:
       - name: Rename artifact
         run: cp .pio/build/cyd_launcher/firmware.bin CYD-Launcher.bin
 
+      - name: Generar descripción de versión
+        run: echo "Version ${{ github.ref_name }}" > CYD-Launcher.txt
+
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          files: CYD-Launcher.bin
+          files: |
+            CYD-Launcher.bin
+            CYD-Launcher.txt
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -219,23 +219,28 @@ void drawDeviceInfo() {
   tft.drawString("Device Info", tft.width() / 2, 12, 4);
 
   int y = 56;
+  const int LINE_H = 22;
   tft.setTextDatum(TL_DATUM);
-  tft.setTextColor(TFT_WHITE, RETRO_BG);
   char line[64];
 
+  tft.setTextColor(RETRO_SIGN, RETRO_BG);
+  snprintf(line, sizeof(line), "Version launcher: %s", LAUNCHER_VERSION);
+  tft.drawString(line, 16, y, 2); y += LINE_H;
+
+  tft.setTextColor(TFT_WHITE, RETRO_BG);
   uint64_t mac = ESP.getEfuseMac();
   snprintf(line, sizeof(line), "MAC: %04X%08X",
            (uint16_t)(mac >> 32), (uint32_t)mac);
-  tft.drawString(line, 16, y, 2); y += 24;
+  tft.drawString(line, 16, y, 2); y += LINE_H;
 
   snprintf(line, sizeof(line), "Chip: %s rev %d", ESP.getChipModel(), ESP.getChipRevision());
-  tft.drawString(line, 16, y, 2); y += 24;
+  tft.drawString(line, 16, y, 2); y += LINE_H;
 
   snprintf(line, sizeof(line), "Flash: %.1f MB", ESP.getFlashChipSize() / 1024.0 / 1024.0);
-  tft.drawString(line, 16, y, 2); y += 24;
+  tft.drawString(line, 16, y, 2); y += LINE_H;
 
   snprintf(line, sizeof(line), "Heap libre: %lu KB", (unsigned long)(ESP.getFreeHeap() / 1024));
-  tft.drawString(line, 16, y, 2); y += 24;
+  tft.drawString(line, 16, y, 2); y += LINE_H;
 
   busToSD();
   if (SD.begin(SD_CS, sharedSPI, 20000000)) {
@@ -243,12 +248,12 @@ void drawDeviceInfo() {
     uint64_t used = SD.usedBytes();
     snprintf(line, sizeof(line), "SD: %.1f / %.1f GB usados",
              used / 1024.0 / 1024.0 / 1024.0, total / 1024.0 / 1024.0 / 1024.0);
-    tft.drawString(line, 16, y, 2); y += 24;
+    tft.drawString(line, 16, y, 2); y += LINE_H;
   }
   busToTouch();
 
   snprintf(line, sizeof(line), "Ultima app: %s", lastAppLabel[0] ? lastAppLabel : "(ninguna)");
-  tft.drawString(line, 16, y, 2); y += 24;
+  tft.drawString(line, 16, y, 2); y += LINE_H;
 
   tft.setTextDatum(BC_DATUM);
   tft.setTextColor(RETRO_FOOTER, RETRO_BG);

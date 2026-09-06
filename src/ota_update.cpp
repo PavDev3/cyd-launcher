@@ -34,7 +34,36 @@ static void drawUpdateProgress(int written, int total) {
   tft.drawString(pct, tft.width() / 2, barY + barH + 8, 4);
 }
 
-bool downloadLatestRelease(const String& ssid, const String& pass) {
+// Consulta la API de GitHub por el tag_name del último release.
+// Devuelve "" si falla (sin bloquear el flujo: se sigue igual a la descarga).
+static String fetchLatestTag() {
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient http;
+  http.setTimeout(10000);
+
+  String url = "https://api.github.com/repos/" OTA_GITHUB_OWNER "/" OTA_GITHUB_REPO "/releases/latest";
+  if (!http.begin(client, url)) return "";
+  http.addHeader("User-Agent", OTA_GITHUB_OWNER "-cyd-launcher");
+  http.addHeader("Accept", "application/vnd.github+json");
+
+  int code = http.GET();
+  String tag = "";
+  if (code == HTTP_CODE_OK) {
+    String body = http.getString();
+    int idx = body.indexOf("\"tag_name\"");
+    if (idx >= 0) {
+      int colon = body.indexOf(':', idx);
+      int q1 = body.indexOf('"', colon + 1);
+      int q2 = (q1 >= 0) ? body.indexOf('"', q1 + 1) : -1;
+      if (q1 >= 0 && q2 > q1) tag = body.substring(q1 + 1, q2);
+    }
+  }
+  http.end();
+  return tag;
+}
+
+UpdateResult downloadLatestRelease(const String& ssid, const String& pass) {
   drawUpdateScreen("Conectando a WiFi...", "(solo redes 2.4GHz)");
 
   // AP_STA: mantiene el punto de acceso vivo (para que el navegador que
@@ -56,8 +85,19 @@ bool downloadLatestRelease(const String& ssid, const String& pass) {
     drawUpdateScreen("No se pudo conectar (timeout)", "Revisa que tu WiFi sea 2.4GHz");
     delay(3000);
     WiFi.mode(WIFI_AP);
-    return false;
+    return UpdateResult::Failed;
   }
+
+  drawUpdateScreen("Comprobando version...");
+  String latestTag = fetchLatestTag();
+  if (latestTag.length() > 0 && latestTag == LAUNCHER_VERSION) {
+    drawUpdateScreen("Ya tienes la ultima version", LAUNCHER_VERSION);
+    delay(2500);
+    WiFi.mode(WIFI_AP);
+    return UpdateResult::AlreadyLatest;
+  }
+  // Si la consulta de version falla (latestTag vacio), seguimos igual:
+  // la descarga directa de releases/latest/download/ es independiente.
 
   drawUpdateScreen("Descargando ultima version...");
 
@@ -75,7 +115,7 @@ bool downloadLatestRelease(const String& ssid, const String& pass) {
     drawUpdateScreen("No se pudo iniciar la descarga");
     delay(2500);
     WiFi.mode(WIFI_AP);
-    return false;
+    return UpdateResult::Failed;
   }
 
   int code = http.GET();
@@ -89,7 +129,7 @@ bool downloadLatestRelease(const String& ssid, const String& pass) {
     delay(3000);
     http.end();
     WiFi.mode(WIFI_AP);
-    return false;
+    return UpdateResult::Failed;
   }
 
   int total = http.getSize(); // -1 si el servidor no manda Content-Length
@@ -103,7 +143,7 @@ bool downloadLatestRelease(const String& ssid, const String& pass) {
     delay(2500);
     http.end();
     WiFi.mode(WIFI_AP);
-    return false;
+    return UpdateResult::Failed;
   }
 
   static uint8_t buf[4096]; // fuera de la pila, igual que en firmware_manager
@@ -131,13 +171,35 @@ bool downloadLatestRelease(const String& ssid, const String& pass) {
 
   f.close();
   http.end();
+
+  bool ok = written > 0 && (total < 0 || written >= total);
+
+  // Descarga best-effort del .txt de versión (se muestra luego en la
+  // pantalla de info del archivo). Si falla, no afecta el resultado del
+  // .bin, que es lo que realmente importa.
+  if (ok) {
+    HTTPClient httpTxt;
+    httpTxt.setTimeout(8000);
+    String txtUrl = "https://github.com/" OTA_GITHUB_OWNER "/" OTA_GITHUB_REPO
+                     "/releases/latest/download/" OTA_ASSET_TXT_NAME;
+    if (httpTxt.begin(client, txtUrl)) {
+      if (httpTxt.GET() == HTTP_CODE_OK) {
+        File txtFile = SD.open("/firmware/" OTA_ASSET_TXT_NAME, FILE_WRITE);
+        if (txtFile) {
+          txtFile.print(httpTxt.getString());
+          txtFile.close();
+        }
+      }
+      httpTxt.end();
+    }
+  }
+
   WiFi.disconnect(true);
   WiFi.mode(WIFI_AP); // vuelve a solo-AP para que la página de subida siga sirviendo
 
-  bool ok = written > 0 && (total < 0 || written >= total);
   drawUpdateScreen(ok ? "Descarga completa" : "Descarga incompleta");
   delay(1500);
-  return ok;
+  return ok ? UpdateResult::Downloaded : UpdateResult::Failed;
 }
 
 // Escribe /firmware/CYD-Launcher.bin directamente en la partición "launcher"

@@ -10,12 +10,17 @@
 // Repo de GitHub del que se descargan las releases
 #define OTA_GITHUB_OWNER "PavDev3"
 #define OTA_GITHUB_REPO  "cyd-launcher"
-#define OTA_ASSET_NAME   "CYD-Launcher.bin"
+#define OTA_ASSET_NAME     "CYD-Launcher.bin"
+#define OTA_ASSET_TXT_NAME "CYD-Launcher.txt" // descripción/versión, se muestra en la pantalla de info
 
-// Conecta a `ssid`/`pass` (STA), descarga la última release y la guarda
-// en /firmware/CYD-Launcher.bin. Dibuja el progreso en pantalla.
-// Devuelve true si la descarga se completó con éxito.
-bool downloadLatestRelease(const String& ssid, const String& pass);
+enum class UpdateResult { Failed, AlreadyLatest, Downloaded };
+
+// Conecta a `ssid`/`pass` (STA), compara la version actual (LAUNCHER_VERSION)
+// contra el tag_name del último release; si coinciden no descarga nada
+// (AlreadyLatest). Si son distintas (o no se pudo comprobar), descarga el
+// .bin y lo guarda en /firmware/CYD-Launcher.bin. Dibuja el progreso en
+// pantalla.
+UpdateResult downloadLatestRelease(const String& ssid, const String& pass);
 
 // Flashea /firmware/CYD-Launcher.bin (ya descargado) directamente en la
 // partición "launcher" (ota_1) — sin pasar por USB. No reinicia por sí
