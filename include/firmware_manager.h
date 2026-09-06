@@ -28,3 +28,14 @@ bool flashFromSD(AppEntry& app);
 
 // Borra el .bin (y su .txt asociado, si existe) de la SD
 bool deleteAppFromSD(AppEntry& app);
+
+// ---------- Backups (/backups/, uno por cada nombre de firmware distinto) ----------
+#define MAX_BACKUPS 8
+extern AppEntry backupApps[MAX_BACKUPS];
+extern int backupCount;
+
+// Escanea /backups/*.bin y rellena backupApps[]/backupCount
+bool scanBackupsDir();
+
+// Borra un backup de la SD
+bool deleteBackupFromSD(AppEntry& backup);

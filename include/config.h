@@ -20,7 +20,7 @@
 // Debe coincidir EXACTAMENTE con el tag de git del release correspondiente
 // (formato CalVer vYYYY.MM.DD[.N]). Se usa para no re-descargar/flashear
 // si ya estás en la última versión. Bump manual antes de cada `git tag`.
-#define LAUNCHER_VERSION "v2026.09.06.3"
+#define LAUNCHER_VERSION "v2026.09.06.5"
 
 // ---------- Pines SD (bus físico propio de la CYD) ----------
 #define SD_SCK   18

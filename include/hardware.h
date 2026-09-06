@@ -37,3 +37,8 @@ void calibrateTouch(bool showIntro);
 
 // ---- Apagado (deep sleep, sin fuente de wake) ----
 void powerOff();
+
+// Sincroniza la hora del sistema por NTP (necesita WiFi ya conectado).
+// Best-effort con timeout corto: si falla, los archivos nuevos en la SD
+// simplemente seguirán con fecha "desconocida" como hasta ahora.
+void syncTimeViaNtp();

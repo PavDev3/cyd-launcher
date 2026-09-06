@@ -61,6 +61,52 @@ bool scanFirmwareDir() {
   return true;
 }
 
+// ---------- Backups guardados (/backups/) ----------
+AppEntry backupApps[MAX_BACKUPS];
+int backupCount = 0;
+
+bool scanBackupsDir() {
+  backupCount = 0;
+  busToSD();
+  File dir = SD.open("/backups");
+  if (!dir || !dir.isDirectory()) return false;
+
+  File entry = dir.openNextFile();
+  while (entry && backupCount < MAX_BACKUPS) {
+    if (!entry.isDirectory()) {
+      String name = entry.name();
+      if (name.endsWith(".bin") || name.endsWith(".BIN")) {
+        AppEntry& app = backupApps[backupCount];
+        String full = String("/backups/") + name;
+        String label = name.substring(0, name.lastIndexOf('.'));
+        strncpy(app.label, label.c_str(), sizeof(app.label) - 1);
+        strncpy(app.path, full.c_str(), sizeof(app.path) - 1);
+        app.size = entry.size();
+        app.desc[0] = '\0';
+
+        time_t t = entry.getLastWrite();
+        if (t > 0) {
+          struct tm* tmInfo = localtime(&t);
+          strftime(app.dateStr, sizeof(app.dateStr), "%Y-%m-%d %H:%M", tmInfo);
+        } else {
+          strncpy(app.dateStr, "fecha desconocida", sizeof(app.dateStr) - 1);
+        }
+
+        backupCount++;
+      }
+    }
+    entry.close();
+    entry = dir.openNextFile();
+  }
+  dir.close();
+  return true;
+}
+
+bool deleteBackupFromSD(AppEntry& backup) {
+  busToSD();
+  return SD.remove(backup.path);
+}
+
 // ---------- Backup de app0 antes de sobrescribir ----------
 bool backupCurrentApp0() {
   const esp_partition_t* part = esp_partition_find_first(

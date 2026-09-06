@@ -27,3 +27,17 @@ UpdateResult downloadLatestRelease(const String& ssid, const String& pass);
 // sola: el llamador decide cuándo hacer esp_restart() (normalmente tras
 // responder al navegador que disparó la actualización).
 bool flashLauncherSelfUpdate();
+
+// Comprobación silenciosa al arrancar (sin menú ni navegador): usa el
+// WiFi guardado en NVS (configurado una vez desde la página de subida).
+// Si no hay credenciales guardadas, o no hay red disponible, no hace
+// nada y vuelve enseguida. Si encuentra una versión distinta, descarga
+// y auto-flashea el launcher y reinicia (esta función no vuelve en ese
+// caso). Devuelve false si no se actualizó (por cualquier motivo).
+bool autoCheckAndUpdateOnBoot();
+
+// Comprobación manual (disparada desde el menú "WiFi > Actualizar
+// launcher"): usa el WiFi guardado, muestra mensajes claros en pantalla
+// (conectando, ya actualizado, error, etc.) y pide confirmación antes de
+// flashear. Asume que ya se comprobó que hay credenciales guardadas.
+void runManualUpdateCheck();

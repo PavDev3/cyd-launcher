@@ -1,12 +1,10 @@
 /*
- * wifi_upload.h — servidor WiFi (AP + WebServer) para subir .bin a
- * /firmware/ en la SD sin sacar la tarjeta del lector.
+ * wifi_upload.h — submenú WiFi: subir .bin, actualizar launcher, o
+ * configurar la red WiFi guardada (STA) para las actualizaciones.
  */
 #pragma once
 
 #include "config.h"
 
-// Levanta el AP, sirve la página de subida, y bloquea hasta que el
-// usuario toca "Salir" en pantalla. Al volver, ya redibuja el menú
-// principal (con el listado de /firmware/ actualizado).
-void runWifiUploadMode();
+// Sub-menú "WiFi": Subir .bin / Actualizar launcher / Conectar WiFi
+void runWifiMenu();

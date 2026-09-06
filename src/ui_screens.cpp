@@ -80,28 +80,114 @@ void runScreenMenu() {
   }
 }
 
-// ---------- Menú principal de Opciones: Pantalla / WiFi / Info / Apagar ----------
+// ---------- Submenú "Backups": lista /backups/, Restaurar / Borrar ----------
+static void refreshBackupRows(OptionRow* rows) {
+  for (int i = 0; i < backupCount; i++) {
+    char buf[26];
+    snprintf(buf, sizeof(buf), "%s (%.1fMB)", backupApps[i].label, backupApps[i].size / 1024.0 / 1024.0);
+    strncpy(rows[i].label, buf, sizeof(rows[i].label) - 1);
+    rows[i].label[sizeof(rows[i].label) - 1] = '\0';
+    rows[i].color = TFT_CYAN;
+  }
+}
+
+// Bloquea hasta que se toque una fila (0..count-1) o se toque fuera (-1)
+static int waitRowTap(const char* title, OptionRow* rows, int count) {
+  int sel = -1;
+  drawRowMenu(title, rows, count, sel);
+  while (true) {
+    if (ts.touched()) {
+      TS_Point p = ts.getPoint();
+      int x = touchScreenX(p.x), y = touchScreenY(p.y);
+      int row = hitRowMenu(x, y, count);
+      if (row != sel) {
+        sel = row;
+        drawRowMenu(title, rows, count, sel);
+        if (row >= 0) beepTick();
+      }
+      while (ts.touched()) delay(10);
+      delay(120);
+      return row;
+    }
+    delay(20);
+  }
+}
+
+void runBackupsMenu() {
+  while (ts.touched()) delay(10);
+  scanBackupsDir();
+
+  if (backupCount == 0) {
+    tft.fillScreen(RETRO_BG);
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextColor(RETRO_SHADOW, RETRO_BG);
+    tft.drawString("Sin backups guardados", tft.width() / 2, tft.height() / 2, 2);
+    while (!ts.touched()) delay(20);
+    while (ts.touched()) delay(10);
+    return;
+  }
+
+  OptionRow rows[MAX_BACKUPS];
+  refreshBackupRows(rows);
+
+  while (true) {
+    int row = waitRowTap("Backups", rows, backupCount);
+    if (row == -1) return; // volver a Opciones
+
+    AppEntry chosen = backupApps[row]; // copia: scanBackupsDir() reescribe el array al borrar
+
+    OptionRow actionRows[2];
+    strncpy(actionRows[0].label, "Restaurar", sizeof(actionRows[0].label) - 1); actionRows[0].color = TFT_GREEN;
+    strncpy(actionRows[1].label, "Borrar",    sizeof(actionRows[1].label) - 1); actionRows[1].color = TFT_RED;
+
+    while (ts.touched()) delay(10);
+    int action = waitRowTap(chosen.label, actionRows, 2);
+
+    if (action == 0) { // Restaurar
+      if (confirmFlash(chosen)) {
+        if (flashFromSD(chosen)) {
+          ledReady();
+          beepOk();
+          tft.fillScreen(TFT_BLACK);
+          tft.setTextDatum(MC_DATUM);
+          tft.setTextColor(TFT_GREEN, TFT_BLACK);
+          tft.drawString("Restaurado, arrancando...", tft.width() / 2, tft.height() / 2, 4);
+          delay(500);
+          esp_restart();
+        }
+      }
+    } else if (action == 1) { // Borrar
+      deleteBackupFromSD(chosen);
+      scanBackupsDir();
+      if (backupCount == 0) return;
+      refreshBackupRows(rows);
+    }
+  }
+}
+
+// ---------- Menú principal de Opciones: Pantalla / WiFi / Backups / Info / Apagar ----------
 void runOptionsMenu() {
-  OptionRow rows[4];
+  OptionRow rows[5];
   strncpy(rows[0].label, "Pantalla",         sizeof(rows[0].label) - 1); rows[0].color = TFT_YELLOW;
-  strncpy(rows[1].label, "Subir por WiFi",   sizeof(rows[1].label) - 1); rows[1].color = TFT_CYAN;
-  strncpy(rows[2].label, "Info del sistema", sizeof(rows[2].label) - 1); rows[2].color = RETRO_SIGN;
-  strncpy(rows[3].label, "Apagar",           sizeof(rows[3].label) - 1); rows[3].color = TFT_RED;
+  strncpy(rows[1].label, "WiFi",             sizeof(rows[1].label) - 1); rows[1].color = TFT_CYAN;
+  strncpy(rows[2].label, "Backups",          sizeof(rows[2].label) - 1); rows[2].color = TFT_ORANGE;
+  strncpy(rows[3].label, "Info del sistema", sizeof(rows[3].label) - 1); rows[3].color = RETRO_SIGN;
+  strncpy(rows[4].label, "Apagar",           sizeof(rows[4].label) - 1); rows[4].color = TFT_RED;
 
   while (ts.touched()) delay(10);
 
   int selected = -1;
-  drawRowMenu("Opciones", rows, 4, selected);
+  drawRowMenu("Opciones", rows, 5, selected);
 
   while (true) {
     if (ts.touched()) {
       TS_Point p = ts.getPoint();
       int x = touchScreenX(p.x), y = touchScreenY(p.y);
-      int row = hitRowMenu(x, y, 4);
+      int row = hitRowMenu(x, y, 5);
 
       if (row != selected) {
         selected = row;
-        drawRowMenu("Opciones", rows, 4, selected);
+        drawRowMenu("Opciones", rows, 5, selected);
         if (row >= 0) beepTick();
       }
 
@@ -110,14 +196,15 @@ void runOptionsMenu() {
 
       if (row == -1) return; // tocó fuera -> volver al menú principal
       if (row == 0) { runScreenMenu(); return; }
-      if (row == 1) { runWifiUploadMode(); return; } // ya redibuja el menú principal al salir
-      if (row == 2) {
+      if (row == 1) { runWifiMenu(); return; }
+      if (row == 2) { runBackupsMenu(); return; }
+      if (row == 3) {
         drawDeviceInfo();
         while (!ts.touched()) delay(20);
         while (ts.touched()) delay(10);
         return;
       }
-      if (row == 3) { powerOff(); } // no vuelve
+      if (row == 4) { powerOff(); } // no vuelve
     }
     delay(20);
   }

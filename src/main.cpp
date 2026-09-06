@@ -46,6 +46,7 @@
 #include "ui_menu.h"
 #include "ui_screens.h"
 #include "wifi_upload.h"
+#include "ota_update.h"
 
 void setup() {
   Serial.begin(115200);
@@ -73,6 +74,12 @@ void setup() {
   tft.setRotation(screenRotation);
 
   drawSplash();
+
+  // Comprobación silenciosa de actualización (solo si hay WiFi guardado
+  // desde la página de subida). Si encuentra una versión nueva, se
+  // auto-flashea y reinicia aquí mismo; si no, sigue el arranque normal
+  // en un par de segundos como mucho (o al instante si no hay WiFi guardado).
+  autoCheckAndUpdateOnBoot();
 
   busToTouch();
   if (!wasCalibrated) {

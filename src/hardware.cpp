@@ -1,5 +1,6 @@
 #include "hardware.h"
 #include <esp_sleep.h>
+#include <time.h>
 
 // ---------- Objetos compartidos (declarados extern en config.h) ----------
 TFT_eSPI tft = TFT_eSPI();
@@ -153,4 +154,21 @@ void powerOff() {
   digitalWrite(TFT_BL, LOW);
   ledOff();
   esp_deep_sleep_start(); // sin fuente de wake: queda "apagado" hasta RESET/power cycle
+}
+
+// ================== Hora por NTP ==================
+// Una vez el sistema tiene hora real, los archivos que se escriban en la
+// SD (vía FAT/vfs) usan esa hora automáticamente — no hace falta tocar
+// nada más en el código de escritura.
+void syncTimeViaNtp() {
+  configTime(0, 0, "pool.ntp.org", "time.google.com");
+
+  time_t now = time(nullptr);
+  unsigned long start = millis();
+  const unsigned long NTP_TIMEOUT_MS = 4000;
+  while (now < 1700000000 && millis() - start < NTP_TIMEOUT_MS) { // ~2023-11 = umbral "hora ya valida"
+    delay(150);
+    now = time(nullptr);
+  }
+  // Best-effort: si no llegó a tiempo, seguimos sin bloquear el flujo.
 }

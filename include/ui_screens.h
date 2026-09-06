@@ -15,7 +15,10 @@ int hitRowMenu(int touchX, int touchY, int count); // -1 = fuera (volver)
 // Submenú "Pantalla": Calibrar / Rotar
 void runScreenMenu();
 
-// Menú principal de Opciones: Pantalla / WiFi / Info / Apagar
+// Submenú "Backups": lista /backups/, restaurar o borrar cada uno
+void runBackupsMenu();
+
+// Menú principal de Opciones: Pantalla / WiFi / Backups / Info / Apagar
 void runOptionsMenu();
 
 // ---- Pantalla de info por app (toque corto) ----

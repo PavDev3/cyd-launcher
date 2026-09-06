@@ -63,37 +63,15 @@ static String fetchLatestTag() {
   return tag;
 }
 
-UpdateResult downloadLatestRelease(const String& ssid, const String& pass) {
-  drawUpdateScreen("Conectando a WiFi...", "(solo redes 2.4GHz)");
-
-  // AP_STA: mantiene el punto de acceso vivo (para que el navegador que
-  // disparó esto siga respondiendo) mientras además nos conectamos como
-  // cliente a la red real para salir a internet.
-  WiFi.mode(WIFI_AP_STA);
-  WiFi.begin(ssid.c_str(), pass.c_str());
-
-  unsigned long start = millis();
-  wl_status_t status;
-  const unsigned long CONNECT_TIMEOUT_MS = 10000;
-  while ((status = WiFi.status()) != WL_CONNECTED && millis() - start < CONNECT_TIMEOUT_MS) {
-    // Fallo definitivo (SSID no encontrado / auth mal) -> no esperar el timeout completo
-    if (status == WL_NO_SSID_AVAIL || status == WL_CONNECT_FAILED) break;
-    delay(200);
-  }
-
-  if (WiFi.status() != WL_CONNECTED) {
-    drawUpdateScreen("No se pudo conectar (timeout)", "Revisa que tu WiFi sea 2.4GHz");
-    delay(3000);
-    WiFi.mode(WIFI_AP);
-    return UpdateResult::Failed;
-  }
-
+// Asume que el WiFi ya está conectado (STA o AP_STA). Comprueba versión y,
+// si hay una distinta, descarga el .bin (+ .txt best-effort). No toca el
+// modo WiFi al terminar — eso lo decide cada llamador (ver más abajo).
+static UpdateResult checkAndDownload() {
   drawUpdateScreen("Comprobando version...");
   String latestTag = fetchLatestTag();
   if (latestTag.length() > 0 && latestTag == LAUNCHER_VERSION) {
     drawUpdateScreen("Ya tienes la ultima version", LAUNCHER_VERSION);
-    delay(2500);
-    WiFi.mode(WIFI_AP);
+    delay(2000);
     return UpdateResult::AlreadyLatest;
   }
   // Si la consulta de version falla (latestTag vacio), seguimos igual:
@@ -114,7 +92,6 @@ UpdateResult downloadLatestRelease(const String& ssid, const String& pass) {
   if (!http.begin(client, url)) {
     drawUpdateScreen("No se pudo iniciar la descarga");
     delay(2500);
-    WiFi.mode(WIFI_AP);
     return UpdateResult::Failed;
   }
 
@@ -128,7 +105,6 @@ UpdateResult downloadLatestRelease(const String& ssid, const String& pass) {
     drawUpdateScreen(line, hint);
     delay(3000);
     http.end();
-    WiFi.mode(WIFI_AP);
     return UpdateResult::Failed;
   }
 
@@ -142,7 +118,6 @@ UpdateResult downloadLatestRelease(const String& ssid, const String& pass) {
     drawUpdateScreen("No se pudo escribir en la SD");
     delay(2500);
     http.end();
-    WiFi.mode(WIFI_AP);
     return UpdateResult::Failed;
   }
 
@@ -194,12 +169,89 @@ UpdateResult downloadLatestRelease(const String& ssid, const String& pass) {
     }
   }
 
-  WiFi.disconnect(true);
-  WiFi.mode(WIFI_AP); // vuelve a solo-AP para que la página de subida siga sirviendo
-
   drawUpdateScreen(ok ? "Descarga completa" : "Descarga incompleta");
   delay(1500);
   return ok ? UpdateResult::Downloaded : UpdateResult::Failed;
+}
+
+UpdateResult downloadLatestRelease(const String& ssid, const String& pass) {
+  drawUpdateScreen("Conectando a WiFi...", "(solo redes 2.4GHz)");
+
+  // AP_STA: mantiene el punto de acceso vivo (para que el navegador que
+  // disparó esto siga respondiendo) mientras además nos conectamos como
+  // cliente a la red real para salir a internet.
+  WiFi.mode(WIFI_AP_STA);
+  WiFi.begin(ssid.c_str(), pass.c_str());
+
+  unsigned long start = millis();
+  wl_status_t status;
+  const unsigned long CONNECT_TIMEOUT_MS = 10000;
+  while ((status = WiFi.status()) != WL_CONNECTED && millis() - start < CONNECT_TIMEOUT_MS) {
+    // Fallo definitivo (SSID no encontrado / auth mal) -> no esperar el timeout completo
+    if (status == WL_NO_SSID_AVAIL || status == WL_CONNECT_FAILED) break;
+    delay(200);
+  }
+
+  if (WiFi.status() != WL_CONNECTED) {
+    drawUpdateScreen("No se pudo conectar (timeout)", "Revisa que tu WiFi sea 2.4GHz");
+    delay(3000);
+    WiFi.mode(WIFI_AP);
+    return UpdateResult::Failed;
+  }
+
+  syncTimeViaNtp(); // aprovecha la conexion para poner hora real (fechas de archivos)
+
+  UpdateResult result = checkAndDownload();
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_AP); // vuelve a solo-AP para que la página de subida siga sirviendo
+  return result;
+}
+
+// Comprobación silenciosa al arrancar: usa el WiFi guardado (sin AP, sin
+// pantalla de subida) para conectar, comprobar versión y, si hay una
+// distinta, descargarla y auto-flashearse. No requiere menú ni navegador.
+// Devuelve true solo si terminó actualizando (en cuyo caso ya reinició).
+bool autoCheckAndUpdateOnBoot() {
+  String ssid = prefs.getString("staSsid", "");
+  if (ssid.length() == 0) return false; // WiFi nunca configurado -> no hacer nada
+  String pass = prefs.getString("staPass", "");
+
+  char line2[48];
+  snprintf(line2, sizeof(line2), "Red: %s", ssid.c_str());
+  drawUpdateScreen("Conectando WiFi guardado...", line2);
+
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid.c_str(), pass.c_str());
+
+  unsigned long start = millis();
+  wl_status_t status;
+  const unsigned long BOOT_CONNECT_TIMEOUT_MS = 6000; // rapido: no alargar el arranque si no hay WiFi
+  while ((status = WiFi.status()) != WL_CONNECTED && millis() - start < BOOT_CONNECT_TIMEOUT_MS) {
+    if (status == WL_NO_SSID_AVAIL || status == WL_CONNECT_FAILED) break;
+    delay(150);
+  }
+
+  if (WiFi.status() != WL_CONNECTED) {
+    WiFi.mode(WIFI_OFF);
+    return false; // sin red disponible ahora mismo, seguimos arrancando normal
+  }
+
+  syncTimeViaNtp();
+
+  UpdateResult result = checkAndDownload();
+  bool flashed = false;
+  if (result == UpdateResult::Downloaded) {
+    flashed = flashLauncherSelfUpdate();
+  }
+
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
+
+  if (flashed) {
+    delay(500);
+    esp_restart();
+  }
+  return flashed;
 }
 
 // Escribe /firmware/CYD-Launcher.bin directamente en la partición "launcher"
@@ -267,4 +319,110 @@ bool flashLauncherSelfUpdate() {
 
   drawUpdateScreen("Listo! Reiniciando...");
   return true;
+}
+
+// ---------- Confirmación antes de actualizar (flujo manual) ----------
+static bool confirmUpdate(const String& newVersion) {
+  int yesX = tft.width() / 2 - BTN_W - 10, btnY = tft.height() / 2 + 25;
+  int noX = tft.width() / 2 + 10;
+
+  tft.fillScreen(RETRO_BG);
+  tft.setTextDatum(MC_DATUM);
+  tft.setTextColor(RETRO_TITLE, RETRO_BG);
+  tft.drawString("Actualizacion disponible", tft.width() / 2, tft.height() / 2 - 55, 2);
+  tft.setTextColor(RETRO_SIGN, RETRO_BG);
+  tft.drawString(newVersion, tft.width() / 2, tft.height() / 2 - 22, 4);
+  tft.setTextColor(TFT_WHITE, RETRO_BG);
+  tft.drawString("Version actual: " LAUNCHER_VERSION, tft.width() / 2, tft.height() / 2 + 4, 2);
+
+  tft.fillRoundRect(yesX, btnY, BTN_W, BTN_H, 8, TFT_GREEN);
+  tft.drawRoundRect(yesX, btnY, BTN_W, BTN_H, 8, TFT_WHITE);
+  tft.setTextColor(TFT_BLACK, TFT_GREEN);
+  tft.drawString("Si", yesX + BTN_W / 2, btnY + BTN_H / 2, 4);
+
+  tft.fillRoundRect(noX, btnY, BTN_W, BTN_H, 8, TFT_RED);
+  tft.drawRoundRect(noX, btnY, BTN_W, BTN_H, 8, TFT_WHITE);
+  tft.setTextColor(TFT_WHITE, TFT_RED);
+  tft.drawString("No", noX + BTN_W / 2, btnY + BTN_H / 2, 4);
+
+  while (ts.touched()) delay(10);
+  delay(150);
+
+  while (true) {
+    if (ts.touched()) {
+      TS_Point p = ts.getPoint();
+      int x = touchScreenX(p.x), y = touchScreenY(p.y);
+      bool onYes = x >= yesX && x <= yesX + BTN_W && y >= btnY && y <= btnY + BTN_H;
+      bool onNo  = x >= noX  && x <= noX  + BTN_W && y >= btnY && y <= btnY + BTN_H;
+      if (onYes || onNo) {
+        while (ts.touched()) delay(10);
+        return onYes;
+      }
+    }
+    delay(20);
+  }
+}
+
+// Comprobación manual: conecta con el WiFi guardado, muestra la versión
+// disponible y pide confirmación antes de descargar/flashear. Asume que
+// el llamador ya comprobó que hay credenciales guardadas.
+void runManualUpdateCheck() {
+  String ssid = prefs.getString("staSsid", "");
+  String pass = prefs.getString("staPass", "");
+
+  char line2[48];
+  snprintf(line2, sizeof(line2), "Red: %s", ssid.c_str());
+  drawUpdateScreen("Conectando WiFi...", line2);
+
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid.c_str(), pass.c_str());
+
+  unsigned long start = millis();
+  wl_status_t status;
+  while ((status = WiFi.status()) != WL_CONNECTED && millis() - start < 10000) {
+    if (status == WL_NO_SSID_AVAIL || status == WL_CONNECT_FAILED) break;
+    delay(150);
+  }
+
+  if (WiFi.status() != WL_CONNECTED) {
+    drawUpdateScreen("No se pudo conectar", "Revisa que tu WiFi sea 2.4GHz");
+    delay(3000);
+    WiFi.mode(WIFI_OFF);
+    return;
+  }
+
+  syncTimeViaNtp();
+
+  drawUpdateScreen("Comprobando version...");
+  String latestTag = fetchLatestTag();
+
+  if (latestTag.length() == 0) {
+    drawUpdateScreen("No se pudo comprobar version", "Revisa tu conexion a internet");
+    delay(2500);
+    WiFi.mode(WIFI_OFF);
+    return;
+  }
+
+  if (latestTag == LAUNCHER_VERSION) {
+    drawUpdateScreen("Ya tienes la ultima version", LAUNCHER_VERSION);
+    delay(2000);
+    WiFi.mode(WIFI_OFF);
+    return;
+  }
+
+  if (!confirmUpdate(latestTag)) {
+    WiFi.mode(WIFI_OFF);
+    return;
+  }
+
+  UpdateResult result = checkAndDownload();
+  bool flashed = (result == UpdateResult::Downloaded) && flashLauncherSelfUpdate();
+
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
+
+  if (flashed) {
+    delay(500);
+    esp_restart();
+  }
 }
