@@ -58,13 +58,12 @@ void ledBusy()   { ledSet(false, false, true);  } // azul
 void ledError()  { ledSet(true,  false, false); } // rojo
 
 // ================== Beep (altavoz piezo/DAC en GPIO26) ==================
+// Deshabilitado: esta placa no trae altavoz montado, así que era peso
+// muerto (movía el pin sin efecto audible). Se deja la función como
+// no-op en vez de borrar las llamadas, por si en el futuro se conecta uno.
 void beep(int freqHz, int ms) {
-  ledcSetup(BEEP_LEDC_CHANNEL, freqHz, 8);
-  ledcAttachPin(SPEAKER_PIN, BEEP_LEDC_CHANNEL);
-  ledcWrite(BEEP_LEDC_CHANNEL, 128);
-  delay(ms);
-  ledcWrite(BEEP_LEDC_CHANNEL, 0);
-  ledcDetachPin(SPEAKER_PIN);
+  (void)freqHz;
+  (void)ms;
 }
 
 void beepOk()    { beep(1200, 60); delay(30); beep(1800, 80); }
