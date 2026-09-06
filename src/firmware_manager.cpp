@@ -1,5 +1,6 @@
 #include "firmware_manager.h"
 #include "hardware.h"
+#include "ota_update.h" // OTA_ASSET_NAME: se excluye del listado (no es un firmware "hijo")
 #include <Update.h>
 #include "esp_ota_ops.h"
 #include "esp_partition.h"
@@ -32,7 +33,8 @@ bool scanFirmwareDir() {
   while (entry && appCount < MAX_APPS) {
     if (!entry.isDirectory()) {
       String name = entry.name();
-      if (name.endsWith(".bin") || name.endsWith(".BIN")) {
+      bool isLauncherOwnBin = name.equalsIgnoreCase(OTA_ASSET_NAME);
+      if (!isLauncherOwnBin && (name.endsWith(".bin") || name.endsWith(".BIN"))) {
         AppEntry& app = apps[appCount];
         String full = String("/firmware/") + name;
         String label = name.substring(0, name.lastIndexOf('.'));
