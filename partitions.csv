@@ -1,0 +1,14 @@
+# Name,     Type, SubType,   Offset,   Size,     Flags
+# Esquema "SD-flash-on-demand" con DOS slots OTA reales (ota_0 + ota_1).
+# launcher (ota_1) ahora incluye WiFi+WebServer (subida de .bin sin SD),
+# lo que le hizo falta más espacio -> se agrandó a costa de app0 (que
+# igual sobraba: HaleHound real pesa ~2.45MB, aquí le quedan ~2.8MB).
+#
+# launcher (ota_1): nuestro menu (WiFi, calibracion, etc.)
+# app0     (ota_0): firmware activo elegido desde la SD (HaleHound, etc.)
+#
+# Total = 0x400000 (4194304 bytes) exacto
+nvs,        data, nvs,       0x9000,   0x5000,
+otadata,    data, ota,       0xe000,   0x2000,
+launcher,   app,  ota_1,     0x10000,  0x110000,
+app0,       app,  ota_0,     0x120000, 0x2e0000,

@@ -1,0 +1,10 @@
+# Build artifacts de PlatformIO
+.pio/
+.vscode/
+
+# Binarios de firmwares de terceros (HaleHound-CYD es cerrado, no se redistribuye)
+*.bin
+
+# Logs de depuración
+serial_capture.log
+*.log
