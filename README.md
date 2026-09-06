@@ -5,12 +5,6 @@ táctil, flashea el elegido al slot OTA activo y arranca.
 
 **Estado: funcionando end-to-end** (launcher ↔ HaleHound-CYD, ida y vuelta).
 
-## Tu placa
-
-- Chip: ESP32-D0WD-V3 (rev 3.1), WiFi+BT
-- Flash: 4MB
-- Puerto: COM3 (CH340)
-
 ## Layout de particiones (`partitions.csv`)
 
 Dos slots OTA **reales** (`ota_0` / `ota_1`), sin `factory`. Esto es
