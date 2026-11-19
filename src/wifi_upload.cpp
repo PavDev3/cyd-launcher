@@ -224,25 +224,38 @@ static void runApSession(ApPurpose purpose) {
 }
 
 // ================== Sub-menú "WiFi" ==================
+static bool ensureWifiConfigured() {
+  if (prefs.getString("staSsid", "").length() > 0) return true;
+  tft.fillScreen(RETRO_BG);
+  tft.setTextDatum(MC_DATUM);
+  tft.setTextColor(TFT_YELLOW, RETRO_BG);
+  tft.drawString("No hay WiFi configurado", tft.width() / 2, tft.height() / 2 - 15, 2);
+  tft.drawString("Configuralo primero...", tft.width() / 2, tft.height() / 2 + 15, 2);
+  delay(1800);
+  runApSession(ApPurpose::ConfigWifi);
+  return false;
+}
+
 void runWifiMenu() {
-  OptionRow rows[3];
+  OptionRow rows[4];
   strncpy(rows[0].label, "Subir .bin",         sizeof(rows[0].label) - 1); rows[0].color = TFT_CYAN;
   strncpy(rows[1].label, "Actualizar launcher", sizeof(rows[1].label) - 1); rows[1].color = TFT_GREEN;
-  strncpy(rows[2].label, "Conectar WiFi",       sizeof(rows[2].label) - 1); rows[2].color = TFT_YELLOW;
+  strncpy(rows[2].label, "Actualizar Marauder", sizeof(rows[2].label) - 1); rows[2].color = TFT_MAGENTA;
+  strncpy(rows[3].label, "Conectar WiFi",       sizeof(rows[3].label) - 1); rows[3].color = TFT_YELLOW;
 
   while (ts.touched()) delay(10);
   int selected = -1;
-  drawRowMenu("WiFi", rows, 3, selected);
+  drawRowMenu("WiFi", rows, 4, selected);
 
   while (true) {
     if (ts.touched()) {
       TS_Point p = ts.getPoint();
       int x = touchScreenX(p.x), y = touchScreenY(p.y);
-      int row = hitRowMenu(x, y, 3);
+      int row = hitRowMenu(x, y, 4);
 
       if (row != selected) {
         selected = row;
-        drawRowMenu("WiFi", rows, 3, selected);
+        drawRowMenu("WiFi", rows, 4, selected);
         if (row >= 0) beepTick();
       }
 
@@ -251,23 +264,19 @@ void runWifiMenu() {
 
       if (row == -1) return; // tocó fuera -> volver a Opciones
       if (row == 0) { runApSession(ApPurpose::Upload); return; }
+      // "Actualizar launcher"/"Actualizar Marauder" necesitan WiFi guardado;
+      // si no hay, mandan directo a configurarlo primero.
       if (row == 1) {
-        // "Actualizar launcher" necesita WiFi guardado; si no hay, te manda
-        // directo a configurarlo primero.
-        if (prefs.getString("staSsid", "").length() == 0) {
-          tft.fillScreen(RETRO_BG);
-          tft.setTextDatum(MC_DATUM);
-          tft.setTextColor(TFT_YELLOW, RETRO_BG);
-          tft.drawString("No hay WiFi configurado", tft.width() / 2, tft.height() / 2 - 15, 2);
-          tft.drawString("Configuralo primero...", tft.width() / 2, tft.height() / 2 + 15, 2);
-          delay(1800);
-          runApSession(ApPurpose::ConfigWifi);
-          return;
-        }
+        if (!ensureWifiConfigured()) return;
         runManualUpdateCheck();
         return;
       }
-      if (row == 2) { runApSession(ApPurpose::ConfigWifi); return; }
+      if (row == 2) {
+        if (!ensureWifiConfigured()) return;
+        runMarauderUpdateCheck();
+        return;
+      }
+      if (row == 3) { runApSession(ApPurpose::ConfigWifi); return; }
     }
     delay(20);
   }

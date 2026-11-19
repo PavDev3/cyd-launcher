@@ -133,7 +133,7 @@ bool backupCurrentApp0() {
 
   unsigned long lastDraw = 0;
   while (done < part->size) {
-    size_t n = min(CHUNK, part->size - done);
+    size_t n = min(CHUNK, (size_t)(part->size - done));
     if (esp_partition_read(part, done, buf, n) != ESP_OK) {
       f.close();
       return false;

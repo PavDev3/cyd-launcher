@@ -244,6 +244,13 @@ bool autoCheckAndUpdateOnBoot() {
     flashed = flashLauncherSelfUpdate();
   }
 
+  // Si el launcher no se va a reiniciar ya mismo, aprovechamos la misma
+  // conexión para revisar también si hay una versión nueva de Marauder
+  // (igual que "OTA" pero solo deja el .bin listo en la SD, no lo flashea).
+  if (!flashed) {
+    downloadLatestMarauder();
+  }
+
   WiFi.disconnect(true);
   WiFi.mode(WIFI_OFF);
 
@@ -319,6 +326,197 @@ bool flashLauncherSelfUpdate() {
 
   drawUpdateScreen("Listo! Reiniciando...");
   return true;
+}
+
+// ---------- Firmware "hijo": ESP32 Marauder ----------
+
+// Busca, dentro del JSON del release, la URL de descarga del asset cuyo
+// nombre termina en `suffix` (ej. "_cyd_2432S028_2usb.bin"). Parseo manual
+// por texto, igual de tosco que fetchLatestTag() pero suficiente: evita
+// meter una librería JSON para un solo campo repetido.
+static bool findAssetUrl(const String& releaseJson, const char* suffix, String& outUrl) {
+  const char* key = "\"browser_download_url\":\"";
+  int searchFrom = 0;
+  while (true) {
+    int idx = releaseJson.indexOf(key, searchFrom);
+    if (idx < 0) return false;
+    int start = idx + strlen(key);
+    int end = releaseJson.indexOf('"', start);
+    if (end < 0) return false;
+    String url = releaseJson.substring(start, end);
+    if (url.endsWith(suffix)) {
+      outUrl = url;
+      return true;
+    }
+    searchFrom = end + 1;
+  }
+}
+
+static String extractTagName(const String& releaseJson) {
+  int idx = releaseJson.indexOf("\"tag_name\"");
+  if (idx < 0) return "";
+  int colon = releaseJson.indexOf(':', idx);
+  int q1 = releaseJson.indexOf('"', colon + 1);
+  int q2 = (q1 >= 0) ? releaseJson.indexOf('"', q1 + 1) : -1;
+  if (q1 >= 0 && q2 > q1) return releaseJson.substring(q1 + 1, q2);
+  return "";
+}
+
+UpdateResult downloadLatestMarauder() {
+  drawUpdateScreen("Buscando Marauder...");
+
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient http;
+  http.setTimeout(10000);
+
+  String apiUrl = "https://api.github.com/repos/" MARAUDER_GITHUB_OWNER "/" MARAUDER_GITHUB_REPO "/releases/latest";
+  if (!http.begin(client, apiUrl)) {
+    drawUpdateScreen("No se pudo consultar GitHub");
+    delay(2500);
+    return UpdateResult::Failed;
+  }
+  http.addHeader("User-Agent", "cyd-launcher");
+  http.addHeader("Accept", "application/vnd.github+json");
+
+  int code = http.GET();
+  if (code != HTTP_CODE_OK) {
+    char line[32];
+    snprintf(line, sizeof(line), "Error HTTP %d", code);
+    drawUpdateScreen(line, "No se pudo consultar el release");
+    delay(2500);
+    http.end();
+    return UpdateResult::Failed;
+  }
+  String body = http.getString();
+  http.end();
+
+  String tag = extractTagName(body);
+
+  busToSD();
+  bool haveFile = SD.exists("/firmware/" MARAUDER_DEST_NAME);
+  String savedTag = prefs.getString(MARAUDER_NVS_TAG_KEY, "");
+  if (haveFile && tag.length() > 0 && tag == savedTag) {
+    drawUpdateScreen("Marauder ya esta al dia", tag.c_str());
+    delay(2000);
+    return UpdateResult::AlreadyLatest;
+  }
+
+  String assetUrl;
+  if (!findAssetUrl(body, MARAUDER_ASSET_SUFFIX, assetUrl)) {
+    drawUpdateScreen("No se encontro el .bin", "para tu modelo de CYD");
+    delay(3000);
+    return UpdateResult::Failed;
+  }
+
+  drawUpdateScreen("Descargando Marauder...", tag.c_str());
+
+  HTTPClient httpBin;
+  httpBin.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
+  httpBin.setTimeout(20000);
+  if (!httpBin.begin(client, assetUrl)) {
+    drawUpdateScreen("No se pudo iniciar la descarga");
+    delay(2500);
+    return UpdateResult::Failed;
+  }
+
+  int code2 = httpBin.GET();
+  if (code2 != HTTP_CODE_OK) {
+    char line[32];
+    snprintf(line, sizeof(line), "Error HTTP %d", code2);
+    drawUpdateScreen(line, "Toca la pantalla para volver");
+    delay(3000);
+    httpBin.end();
+    return UpdateResult::Failed;
+  }
+
+  int total = httpBin.getSize();
+  WiFiClient* stream = httpBin.getStreamPtr();
+
+  busToSD();
+  if (!SD.exists("/firmware")) SD.mkdir("/firmware");
+  File f = SD.open("/firmware/" MARAUDER_DEST_NAME, FILE_WRITE);
+  if (!f) {
+    drawUpdateScreen("No se pudo escribir en la SD");
+    delay(2500);
+    httpBin.end();
+    return UpdateResult::Failed;
+  }
+
+  static uint8_t buf[4096];
+  int written = 0;
+  drawUpdateProgress(0, total);
+  unsigned long lastDraw = millis();
+
+  while (httpBin.connected() && (total < 0 || written < total)) {
+    size_t avail = stream->available();
+    if (avail) {
+      int n = stream->readBytes(buf, avail > sizeof(buf) ? sizeof(buf) : avail);
+      if (n <= 0) break;
+      f.write(buf, n);
+      written += n;
+      if (millis() - lastDraw > 120) {
+        drawUpdateProgress(written, total);
+        lastDraw = millis();
+      }
+    } else if (!httpBin.connected()) {
+      break;
+    } else {
+      delay(1);
+    }
+  }
+
+  f.close();
+  httpBin.end();
+
+  bool ok = written > 0 && (total < 0 || written >= total);
+
+  if (ok) {
+    File txtFile = SD.open("/firmware/" MARAUDER_DEST_TXT_NAME, FILE_WRITE);
+    if (txtFile) {
+      txtFile.print("ESP32 Marauder " + tag);
+      txtFile.close();
+    }
+    if (tag.length() > 0) prefs.putString(MARAUDER_NVS_TAG_KEY, tag);
+  }
+
+  drawUpdateScreen(ok ? "Marauder descargado" : "Descarga incompleta",
+                    ok ? "Elige ESP32Marauder en el menu" : nullptr);
+  delay(2000);
+  return ok ? UpdateResult::Downloaded : UpdateResult::Failed;
+}
+
+void runMarauderUpdateCheck() {
+  String ssid = prefs.getString("staSsid", "");
+  String pass = prefs.getString("staPass", "");
+
+  char line2[48];
+  snprintf(line2, sizeof(line2), "Red: %s", ssid.c_str());
+  drawUpdateScreen("Conectando WiFi...", line2);
+
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid.c_str(), pass.c_str());
+
+  unsigned long start = millis();
+  wl_status_t status;
+  while ((status = WiFi.status()) != WL_CONNECTED && millis() - start < 10000) {
+    if (status == WL_NO_SSID_AVAIL || status == WL_CONNECT_FAILED) break;
+    delay(150);
+  }
+
+  if (WiFi.status() != WL_CONNECTED) {
+    drawUpdateScreen("No se pudo conectar", "Revisa que tu WiFi sea 2.4GHz");
+    delay(3000);
+    WiFi.mode(WIFI_OFF);
+    return;
+  }
+
+  syncTimeViaNtp();
+  downloadLatestMarauder();
+
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
+  scanFirmwareDir(); // el .bin nuevo debe aparecer ya en el menu principal
 }
 
 // ---------- Confirmación antes de actualizar (flujo manual) ----------

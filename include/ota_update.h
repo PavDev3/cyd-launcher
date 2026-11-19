@@ -13,6 +13,19 @@
 #define OTA_ASSET_NAME     "CYD-Launcher.bin"
 #define OTA_ASSET_TXT_NAME "CYD-Launcher.txt" // descripción/versión, se muestra en la pantalla de info
 
+// ---------- Firmware "hijo": ESP32 Marauder ----------
+// A diferencia del launcher, este .bin no se autoflashea: solo se deja
+// en /firmware/ como cualquier otro firmware de la biblioteca, para que
+// el usuario lo elija y flashee desde el menú principal como siempre.
+#define MARAUDER_GITHUB_OWNER  "justcallmekoko"
+#define MARAUDER_GITHUB_REPO   "ESP32Marauder"
+// Sufijo exacto del asset para tu modelo de CYD (2432S028, 2 puertos USB).
+// Si cambias de placa, ajusta este sufijo al nombre que publique el release.
+#define MARAUDER_ASSET_SUFFIX  "_cyd_2432S028_2usb.bin"
+#define MARAUDER_DEST_NAME     "ESP32Marauder.bin"
+#define MARAUDER_DEST_TXT_NAME "ESP32Marauder.txt"
+#define MARAUDER_NVS_TAG_KEY   "marauderTag"
+
 enum class UpdateResult { Failed, AlreadyLatest, Downloaded };
 
 // Conecta a `ssid`/`pass` (STA), compara la version actual (LAUNCHER_VERSION)
@@ -41,3 +54,16 @@ bool autoCheckAndUpdateOnBoot();
 // (conectando, ya actualizado, error, etc.) y pide confirmación antes de
 // flashear. Asume que ya se comprobó que hay credenciales guardadas.
 void runManualUpdateCheck();
+
+// Consulta el último release de ESP32Marauder, y si hay una versión
+// distinta a la última descargada (comparado por tag, guardado en NVS),
+// descarga el asset que coincide con MARAUDER_ASSET_SUFFIX y lo guarda en
+// /firmware/MARAUDER_DEST_NAME. Dibuja progreso en pantalla igual que el
+// resto de pantallas de actualización. No flashea nada.
+UpdateResult downloadLatestMarauder();
+
+// Comprobación manual (disparada desde el menú "WiFi > Actualizar
+// Marauder"): conecta con el WiFi guardado y llama a
+// downloadLatestMarauder(). Asume que ya se comprobó que hay credenciales
+// guardadas.
+void runMarauderUpdateCheck();

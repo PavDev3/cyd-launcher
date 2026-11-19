@@ -1,14 +1,21 @@
 # Name,     Type, SubType,   Offset,   Size,     Flags
 # Esquema "SD-flash-on-demand" con DOS slots OTA reales (ota_0 + ota_1).
 # launcher (ota_1) incluye WiFi+WebServer (subida de .bin sin SD), lo que
-# le hizo falta más espacio -> se agrandó a costa de app0 (~2.8MB de
+# le hizo falta más espacio -> se agrandó a costa de app0 (~2.6MB de
 # margen, de sobra para la mayoria de firmwares Arduino/ESP-IDF).
 #
 # launcher (ota_1): nuestro menu (WiFi, calibracion, etc.)
 # app0     (ota_0): firmware activo elegido desde la SD
 #
+# launcher se agrando de 0x110000 a 0x150000 (2026-11-19): el binario ya
+# habia superado el tamano anterior (~1.25MB compilado vs 1.06MB de la
+# particion vieja) por el feature de "Actualizar Marauder". Esto mueve el
+# offset de app0 de 0x120000 a 0x160000 -- cualquier app0 flasheado antes
+# de este cambio queda invalido y hay que volver a elegir un firmware
+# desde el menu tras reflashear.
+#
 # Total = 0x400000 (4194304 bytes) exacto
 nvs,        data, nvs,       0x9000,   0x5000,
 otadata,    data, ota,       0xe000,   0x2000,
-launcher,   app,  ota_1,     0x10000,  0x110000,
-app0,       app,  ota_0,     0x120000, 0x2e0000,
+launcher,   app,  ota_1,     0x10000,  0x150000,
+app0,       app,  ota_0,     0x160000, 0x2a0000,
